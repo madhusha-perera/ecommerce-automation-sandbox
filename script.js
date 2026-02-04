@@ -1,6 +1,21 @@
-// Data persistence
-let users = JSON.parse(localStorage.getItem("users") || "[]");
+// --- 1. FIREBASE CONFIGURATION ---
+// REPLACE THIS BLOCK with the actual config from your Firebase Console
+const firebaseConfig = {
+  apiKey: "AIzaSyC_Em8LUAAHHqmJtYakKmVHOguWf8AQQJI",
+    authDomain: "ecommerce-test-6bbe1.firebaseapp.com",
+    projectId: "ecommerce-test-6bbe1",
+    storageBucket: "ecommerce-test-6bbe1.firebasestorage.app",
+    messagingSenderId: "334991860288",
+    appId: "1:334991860288:web:fe5be28c3c0c970ce4b5a5",
+    measurementId: "G-QZE9QGJJRV"
+  };
 
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// --- 2. PRODUCT DATA ---
 const products = [
   { name: "Laptop", price: "$1200", image: "https://via.placeholder.com/150" },
   { name: "Phone", price: "$800", image: "https://via.placeholder.com/150" },
@@ -10,7 +25,7 @@ const products = [
   { name: "Monitor", price: "$250", image: "https://via.placeholder.com/150" }
 ];
 
-// UI: Rendering Products
+// --- 3. UI RENDERING ---
 function renderProducts(list) {
   const grid = document.getElementById("productsGrid");
   if (!grid) return;
@@ -23,26 +38,25 @@ function renderProducts(list) {
   `).join('');
 }
 
-// Logic: Check Login State for Navbar
 function updateNavbar() {
     const authLinks = document.getElementById("authLinks");
     const loggedInUser = JSON.parse(sessionStorage.getItem("loggedInUser"));
 
     if (loggedInUser && authLinks) {
         authLinks.innerHTML = `
-            <span class="mr-4 font-semibold text-gray-700">Hi, ${loggedInUser.firstName} ${loggedInUser.lastName}</span>
+            <span class="mr-4 font-semibold text-gray-700">Hi, ${loggedInUser.firstName}</span>
             <button onclick="logoutUser()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Logout</button>
         `;
     }
 }
 
-// Logic: Logout
+// --- 4. CORE LOGIC ---
+
 function logoutUser() {
     sessionStorage.removeItem("loggedInUser");
     window.location.href = "index.html";
 }
 
-// Logic: Search
 function handleSearch(e) {
   e.preventDefault();
   const searchTerm = document.getElementById("small-searchterms").value.toLowerCase();
@@ -50,13 +64,13 @@ function handleSearch(e) {
   renderProducts(filtered);
 }
 
-// Logic: Registration
-function registerUser() {
-  const firstName = document.getElementById("FirstName").value.trim();
-  const lastName = document.getElementById("LastName").value.trim();
-  const email = document.getElementById("Email").value.trim();
-  const password = document.getElementById("Password").value;
-  const confirm = document.getElementById("ConfirmPassword").value;
+// --- 5. FIREBASE REGISTRATION (Async) ---
+async function registerUser() {
+  const firstName = document.getElementById("FirstName")?.value.trim();
+  const lastName = document.getElementById("LastName")?.value.trim();
+  const email = document.getElementById("Email")?.value.trim();
+  const password = document.getElementById("Password")?.value;
+  const confirm = document.getElementById("ConfirmPassword")?.value;
   const gender = document.querySelector('input[name="gender"]:checked')?.value;
 
   if (!firstName || !lastName || !email || !password || !confirm || !gender) {
@@ -68,28 +82,69 @@ function registerUser() {
     return;
   }
 
-  users.push({ firstName, lastName, email, password });
-  localStorage.setItem("users", JSON.stringify(users));
-  
-  // REDIRECT TO HOME PAGE AFTER REGISTRATION
-  alert("Registration Successful!");
-  window.location.href = "index.html";
-}
-
-// Logic: Login
-function loginUser() {
-  const email = document.getElementById("Email").value.trim();
-  const password = document.getElementById("Password").value;
-  const resultEl = document.getElementById("result");
-
-  const user = users.find(u => u.email === email && u.password === password);
-  
-  if (user) {
-    // Save user to session
-    sessionStorage.setItem("loggedInUser", JSON.stringify(user));
-    window.location.href = "index.html";
-  } else {
-    resultEl.innerText = "Invalid email or password";
-    resultEl.className = "mt-4 font-bold text-red-600";
+  try {
+    // Save to Firestore: "users" collection, document ID is the email
+    await db.collection("users").doc(email).set({
+      firstName,
+      lastName,
+      email,
+      password,
+      gender,
+      createdAt: new Date().toISOString()
+    });
+    
+    alert("Registration Successful!");
+    window.location.href = "login.html"; // Move to login after success
+  } catch (error) {
+    console.error("Firebase Error:", error);
+    alert("System error. Check if Firestore 'Test Mode' is enabled.");
   }
 }
+
+// --- 6. FIREBASE LOGIN (Async) ---
+async function loginUser() {
+  const email = document.getElementById("Email")?.value.trim();
+  const password = document.getElementById("Password")?.value;
+  const resultEl = document.getElementById("result");
+
+  if (!email || !password) {
+    if (resultEl) resultEl.innerText = "Please enter email and password";
+    return;
+  }
+
+  try {
+    // Look up the user by their email document ID
+    const userDoc = await db.collection("users").doc(email).get();
+
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      if (userData.password === password) {
+        // Success: Store in sessionStorage (persists until tab closes)
+        sessionStorage.setItem("loggedInUser", JSON.stringify(userData));
+        window.location.href = "index.html";
+      } else {
+        showError(resultEl, "Invalid password");
+      }
+    } else {
+      showError(resultEl, "User does not exist");
+    }
+  } catch (error) {
+    console.error("Login Error:", error);
+    showError(resultEl, "Connection error. Check console.");
+  }
+}
+
+function showError(el, msg) {
+  if (el) {
+    el.innerText = msg;
+    el.className = "mt-4 font-bold text-red-600";
+  } else {
+    alert(msg);
+  }
+}
+
+// Initialize UI
+document.addEventListener("DOMContentLoaded", () => {
+    updateNavbar();
+    renderProducts(products);
+});
