@@ -1,0 +1,10 @@
+body {
+    font-family: Arial, sans-serif;
+}
+header a, header span {
+    display: inline-flex;
+    align-items: center;
+}
+button, a {
+    transition: all 0.2s ease-in-out;
+}
